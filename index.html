@@ -290,7 +290,8 @@ const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTkp58o95zdpqV4
 
         for (let i = 1; i < rows.length; i++) {
             // RegEx para que las comas dentro de las celdas no rompan la matriz
-            const cols = rows[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+            c// USÁ ESTA (mantiene los nombres completos con espacios):
+const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             const cleanCols = cols.map(c => c.replace(/^"|"$/g, '').trim());
 
             if (cleanCols.length >= 2) {
