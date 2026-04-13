@@ -266,14 +266,13 @@ const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTkp58o95zdpqV4
     renderFaq();
 }
        // --- EXCEL SYNC ---
-  async function syncPrices() {
+async function syncPrices() {
     try {
         const response = await fetch(CSV_URL + '&cb=' + Date.now());
         const data = await response.text();
         const rows = data.split(/\r?\n/).filter(row => row.trim() !== "");
         
-        // 1. LEER ENCABEZADOS: Buscamos en qué columna está cada cosa
-        // Limpiamos espacios, comillas y pasamos a mayúsculas para que coincida siempre
+        // 1. LEER ENCABEZADOS
         const headers = rows[0].split(',').map(h => h.trim().toUpperCase().replace(/"/g, ''));
         
         const idx = {
@@ -289,17 +288,16 @@ const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTkp58o95zdpqV4
         const localPhotos = JSON.parse(localStorage.getItem('sl_manual_photos')) || {};
 
         for (let i = 1; i < rows.length; i++) {
-            // RegEx para que las comas dentro de las celdas no rompan la matriz
-            c// USÁ ESTA (mantiene los nombres completos con espacios):
-const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            const cleanCols = cols.map(c => c.replace(/^"|"$/g, '').trim());
+            // PROCESAMIENTO ROBUSTO:
+            // Separamos por coma y limpiamos comillas/espacios en un solo paso eficiente
+            const cleanCols = rows[i].split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
 
             if (cleanCols.length >= 2) {
                 const id = cleanCols[idx.id] || i.toString();
                 
                 newCatalog.push({
                     id: id,
-                    nombre: cleanCols[idx.nombre] || "Producto sin nombre",
+                    nombre: cleanCols[idx.nombre] || "Producto sin nombre", // Captura el nombre completo (Lattafa Asad, etc.)
                     precio: cleanCols[idx.precio] || "0",
                     disponible: cleanCols[idx.stock] ? cleanCols[idx.stock].toLowerCase().includes('si') : false,
                     desc: cleanCols[idx.desc] || "Fragancia exclusiva.",
