@@ -269,49 +269,74 @@ const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTkp58o95zdpqV4
 async function syncPrices() {
     try {
         const response = await fetch(CSV_URL + '&cb=' + Date.now());
-        const data = await response.text();
-        const rows = data.split(/\r?\n/).filter(row => row.trim() !== "");
+        const csvText = await response.text();
         
-        // 1. LEER ENCABEZADOS
-        const headers = rows[0].split(',').map(h => h.trim().toUpperCase().replace(/"/g, ''));
-        
-        const idx = {
-            id: headers.indexOf("ID"),
-            nombre: headers.indexOf("NOMBRE"),
-            precio: headers.indexOf("PRECIO"),
-            stock: headers.indexOf("STOCK"),
-            desc: headers.indexOf("DESCRIPCION"),
-            img: headers.indexOf("IMAGEN")
+        // PARSER ROBUSTO: Maneja comas, puntos y saltos de línea dentro de comillas
+        const parseCSV = (text) => {
+            const result = [];
+            let row = [];
+            let cell = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const next = text[i+1];
+                if (inQuotes) {
+                    if (char === '"' && next === '"') { cell += '"'; i++; }
+                    else if (char === '"') inQuotes = false;
+                    else cell += char;
+                } else {
+                    if (char === '"') inQuotes = true;
+                    else if (char === ',') { row.push(cell); cell = ''; }
+                    else if (char === '\n' || (char === '\r' && next === '\n')) {
+                        row.push(cell); result.push(row); row = []; cell = '';
+                        if (char === '\r') i++;
+                    } else cell += char;
+                }
+            }
+            if (cell || row.length > 0) { row.push(cell); result.push(row); }
+            return result;
         };
 
-        const newCatalog = [];
+        const allRows = parseCSV(csvText);
+        if (allRows.length < 2) return;
+
+        const headers = allRows[0].map(h => h.trim().toUpperCase());
+        const findIdx = (key) => headers.findIndex(h => h.includes(key));
+        
+        const idx = {
+            id: findIdx("ID"),
+            nombre: findIdx("NOMBRE"),
+            precio: findIdx("PRECIO"),
+            stock: findIdx("STOCK"),
+            desc: findIdx("DESC"),
+            img: findIdx("IMAGEN")
+        };
+
         const localPhotos = JSON.parse(localStorage.getItem('sl_manual_photos')) || {};
+        const newCatalog = [];
 
-        for (let i = 1; i < rows.length; i++) {
-            // PROCESAMIENTO ROBUSTO:
-            // Separamos por coma y limpiamos comillas/espacios en un solo paso eficiente
-            const cleanCols = rows[i].split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
+        for (let i = 1; i < allRows.length; i++) {
+            const cols = allRows[i];
+            if (cols.length <= 1) continue; // Salta filas vacías
 
-            if (cleanCols.length >= 2) {
-                const id = cleanCols[idx.id] || i.toString();
-                
-                newCatalog.push({
-                    id: id,
-                    nombre: cleanCols[idx.nombre] || "Producto sin nombre", // Captura el nombre completo (Lattafa Asad, etc.)
-                    precio: cleanCols[idx.precio] || "0",
-                    disponible: cleanCols[idx.stock] ? cleanCols[idx.stock].toLowerCase().includes('si') : false,
-                    desc: cleanCols[idx.desc] || "Fragancia exclusiva.",
-                    img: localPhotos[id] || limpiarLink(cleanCols[idx.img])
-                });
-            }
+            const idExcel = cols[idx.id]?.trim() || i.toString();
+            
+            newCatalog.push({
+                id: idExcel,
+                nombre: cols[idx.nombre]?.trim() || "Sin nombre",
+                precio: cols[idx.precio]?.trim() || "0",
+                disponible: cols[idx.stock]?.toLowerCase().includes('si'),
+                desc: cols[idx.desc]?.trim() || "Fragancia exclusiva.",
+                img: localPhotos[idExcel] || limpiarLink(cols[idx.img])
+            });
         }
+        
         catalog = newCatalog;
         renderCatalog();
     } catch (e) { 
-        console.error("Error en sincronización:", e); 
+        console.error("Error crítico de sincronización:", e); 
     }
-}
-// Busca esta función y reemplázala:
+}// Busca esta función y reemplázala:
 function renderCatalog() {
     const grid = document.getElementById('product-grid');
     grid.innerHTML = catalog.map(p => `
